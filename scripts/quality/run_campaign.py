@@ -24,11 +24,21 @@ if args.select:
 if not chosen:parser.error("No campaign test files selected")
 out=args.output_dir.resolve();out.mkdir(parents=True,exist_ok=True)
 # Preserve prior evidence, but never parse it as this invocation's result.
-previous = [p for p in out.iterdir() if not p.name.startswith('previous-')]
+# Preserve only runner-owned evidence, never source or unrelated files.
+artifact_names = ['cases.json', 'junit.xml']
+previous = [out / name for name in artifact_names if (out / name).is_file()]
+for group in out.glob("group-*"):
+    if group.is_dir() and group.name[6:].isdigit():
+        for name in [".coverage", "junit.xml", "coverage.json", "execution.log", "coverage-report.log"]:
+            artifact = group / name
+            if artifact.is_file():
+                previous.append(artifact)
 if previous:
-    history = Path(tempfile.mkdtemp(prefix='previous-', dir=out))
+    history = Path(tempfile.mkdtemp(prefix="previous-", dir=out))
     for artifact in previous:
-        shutil.move(str(artifact), history / artifact.name)
+        target = history / artifact.relative_to(out)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(artifact), target)
 
 (out/"tmp").mkdir(exist_ok=True)
 (out/"mpl").mkdir(exist_ok=True)
@@ -47,13 +57,16 @@ for number,group in enumerate(sorted({str(Path(path.split("::")[0]).parent) for 
  group_env=dict(env)
  group_env["PYTHONPATH"]=str(ROOT/group)+os.pathsep+env["PYTHONPATH"]
  group_env["COVERAGE_FILE"]=str(group_out/".coverage")
- command=[sys.executable,"-m","coverage","run","--branch","--source=.","-m","pytest","-c",os.devnull,"--rootdir="+str(ROOT),"-p","quality_boundary","-p","pytest_mock","--import-mode=importlib","-q","--junitxml="+str(group_out/"junit.xml"),*group_files]
+ command=[sys.executable,"-m","coverage","run","--branch","--source=.","-m","pytest","-c",os.devnull,"--rootdir="+str(ROOT),"--import-mode=importlib","-q","--junitxml="+str(group_out/"junit.xml"),*group_files]
  for plugin in ["offline_guard","offline_sdk"]:
   if (ROOT/"scripts/offline"/(plugin+".py")).exists():command[command.index("-p"):command.index("-p")]=["-p",plugin]
  result=subprocess.run(command,cwd=ROOT,env=group_env,text=True,capture_output=True)
  commands.append({"group":group,"command":command});returncodes.append(result.returncode)
  (group_out/"execution.log").write_text(result.stdout+"\n"+result.stderr)
  report=subprocess.run([sys.executable,"-m","coverage","json","-o",str(group_out/"coverage.json")],cwd=ROOT,env=group_env,text=True,capture_output=True)
+ returncodes.append(report.returncode)
+ commands[-1]["test_returncode"] = result.returncode
+ commands[-1]["coverage_returncode"] = report.returncode
  (group_out/"coverage-report.log").write_text(report.stdout+report.stderr)
  if (group_out/"junit.xml").exists():
   xml=ET.parse(group_out/"junit.xml").getroot()
@@ -61,7 +74,7 @@ for number,group in enumerate(sorted({str(Path(path.split("::")[0]).parent) for 
   for case in xml.findall(".//testcase"):
    records.append({"id":case.get("classname","")+"::"+case.get("name",""),"group":group,"result":"failed" if case.find("failure") is not None else "error" if case.find("error") is not None else "skipped" if case.find("skipped") is not None else "passed"})
 ET.ElementTree(combined).write(out/"junit.xml",encoding="unicode")
-returncode=max(returncodes,default=2)
+returncode = max((128 - code if code < 0 else code for code in returncodes), default=2)
 counts={"total":len(records),"passed":sum(r["result"]=="passed" for r in records),"failed":sum(r["result"]=="failed" for r in records),"errors":sum(r["result"]=="error" for r in records),"skipped":sum(r["result"]=="skipped" for r in records)}
 (out/"cases.json").write_text(json.dumps({**counts,"records":records,"returncode":returncode,"commands":commands,"selected_files":chosen,"extra_paths":[str(p.resolve()) for p in extra]},indent=2)+"\n")
 print(json.dumps({**counts,"returncode":returncode}))

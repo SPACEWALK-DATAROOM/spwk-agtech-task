@@ -28,4 +28,16 @@ These tests execute local original definitions and isolate SDK/database/configur
 
 No production DB/API/S3/ECR/deployment path was found in the checked push/PR/tag workflow scope. Existing documentation/style workflows, where present, remain unchanged. Current-head review and completed non-failing CI are still required before merge.
 
-Original criteria: publish the exact approved packets, first-party assertions and necessary fixtures/support, preserve source SHA and raw failures, and squash only after actual current-head Codex review SUCCESS with completed non-failing CI. Publication exclusions: none. Criteria loosened: no. Undo: revert the eventual test-only squash commit.
+Original criteria: publish the exact approved packets, first-party assertions and necessary fixtures/support, preserve source SHA and raw failures, and squash only after actual current-head Codex review SUCCESS with completed non-failing CI. Publication exclusions: the exact unused support listed below. Criteria loosened: no. Undo: revert the eventual test-only squash commit.
+
+
+## Review-driven runner safety repair
+
+Actual Codex reviews exposed two runner defects: a shared output directory could move source/user files into history, and `max()` could hide a negative signal exit behind another group's success. Archiving now identifies only known result filenames, including known files inside numbered result groups, and preserves their relative paths in history. It never moves source directories, Git metadata, or unrelated user notes. No output-location refusal or source change is introduced.
+
+Controlled copies of each affected runner exercised repository-root output and verified source, test, Git-marker and user-note files remain in place after the repair. Before/after raw invocations remain in the publication receipt. These are filesystem/failure controls, not a claim that missing-dependency invocations passed source contracts.
+
+Where the grouped campaign runner exists, signal exits are normalized to nonzero shell exits and coverage-export failures also propagate. The shared implementation was measured with a real SIGTERM-terminated test subprocess: prior exit 0 became exit 143 while another group's genuine passing case remained recorded. A real terminated coverage-export subprocess likewise changed exit 0 to 143. Exact controls are preserved under the avm-11-dandok publication evidence; individual source bodies and expectations remain unchanged. Unaffected functional results above are reused instead of repeatedly executing entire repositories.
+
+Unused newly added support removed after the actual cut finding:
+- `scripts/quality/quality_boundary.py` — SHA256 `4da1726eefa5c6a8e40a3c5f4855a748fe9c15b6d192ee9407defea6f41dfc67`; Selected local dataset/packaging/PCSE or Gower geometry contracts consume no AWS/DB shim; actual Codex review cut finding confirmed needless botocore dependency.
