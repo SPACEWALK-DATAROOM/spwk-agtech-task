@@ -1,0 +1,6 @@
+[
+  "tests/test_pcse_helpers_functionality.py",
+  "tests/functional_wave3/test_pcse_numerics.py",
+  "tests/functional_wave3/test_weather_cache_names.py",
+  "tests/functional_wave3/test_nasapower_records.py"
+]
